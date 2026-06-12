@@ -32,6 +32,9 @@ have() { command -v "$1" >/dev/null 2>&1; }
 # Global set by select_os(): "ubuntu" or "macos"
 OS=""
 
+# Absolute path to this repo (for installing agents/ into ~/.claude/agents).
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+
 # ---------------------------------------------------------------------------
 # Step 1 — OS selection (runs before any install)
 # ---------------------------------------------------------------------------
@@ -574,6 +577,24 @@ configure_agent_browser_skill() {
     || warn "Could not install agent-browser plugin. Manual alternative: npx skills add vercel-labs/agent-browser -g -a claude-code -y"
 }
 
+# Install repo subagents (agents/*.md → ~/.claude/agents/). New or changed
+# agents load at the next Claude session start.
+sync_agents() {
+  local src="$SCRIPT_DIR/agents" f name
+  if ! [ -d "$src" ]; then
+    warn "agents/ dir not found next to setup.sh — skipping agent sync."
+    return 0
+  fi
+  mkdir -p "$CLAUDE_DIR/agents"
+  for f in "$src"/*.md; do
+    [ -e "$f" ] || continue
+    name="$(basename "$f")"
+    [ "$name" = "README.md" ] && continue
+    install -m 0644 "$f" "$CLAUDE_DIR/agents/$name"
+    success "Installed agent → $CLAUDE_DIR/agents/$name"
+  done
+}
+
 configure_claude() {
   info "Configuring Claude Code..."
   if ! have claude; then
@@ -587,6 +608,7 @@ configure_claude() {
   configure_claude_md
   configure_plugins
   configure_agent_browser_skill
+  sync_agents
 }
 
 # ---------------------------------------------------------------------------
@@ -614,7 +636,7 @@ summary() {
   report_tool "agent-brwsr" agent-browser
   echo
   info "Claude Code config applied: model opus[1m], dark theme, statusline, 'memory' MCP, official plugin marketplace,"
-  info "agent-browser (persistent profile + skill + Bash allow-rule)."
+  info "agent-browser (persistent profile + skill + Bash allow-rule) and subagents (scout, surfer)."
   echo
   info "Next steps:"
   echo "  • If a command isn't found, restart your shell or 'source' your rc file"
