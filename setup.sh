@@ -144,6 +144,23 @@ install_hermes() {
   success "Hermes installer finished."
 }
 
+install_bun() {
+  # Bun is the runtime for plugin MCP channel servers (e.g. the official
+  # telegram plugin) — without it those servers silently fail to launch.
+  info "Installing Bun..."
+  if have bun; then
+    success "Bun already installed — skipping."
+    return 0
+  fi
+  curl -fsSL https://bun.sh/install | bash
+  # The installer puts bun in ~/.bun/bin and only edits shell rc files; link it
+  # into /usr/local/bin so non-interactive processes (MCP launches) find it too.
+  if [ -x "$HOME/.bun/bin/bun" ] && [ -w /usr/local/bin ]; then
+    ln -sf "$HOME/.bun/bin/bun" /usr/local/bin/bun
+  fi
+  success "Bun installer finished."
+}
+
 install_gh_ubuntu() {
   # Official GitHub CLI apt-repo install procedure.
   if ! have wget; then
@@ -402,6 +419,7 @@ summary() {
   report_tool "Claude Code" claude
   report_tool "Hermes"      hermes
   report_tool "GitHub CLI"  gh
+  report_tool "Bun"         bun
   echo
   info "Claude Code config applied: model opus[1m], dark theme, statusline, 'memory' MCP, official plugin marketplace."
   echo
@@ -426,6 +444,7 @@ main() {
   install_claude || error "Claude Code install failed."
   install_hermes || error "Hermes install failed."
   install_gh     || error "GitHub CLI install failed."
+  install_bun    || error "Bun install failed."
   configure_claude || error "Claude Code configuration failed."
   summary
 }
