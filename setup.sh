@@ -161,6 +161,156 @@ install_bun() {
   success "Bun installer finished."
 }
 
+install_agent_browser() {
+  # agent-browser (vercel-labs) drives a real headless Chrome for AI agents:
+  # the browsing backend for the 'surfer' subagent (and usable by Hermes).
+  info "Installing agent-browser (browser automation CLI)..."
+  if ! have npm; then
+    warn "npm not found — skipping agent-browser install."
+    return 0
+  fi
+  if have agent-browser; then
+    success "agent-browser already installed — skipping ($(agent-browser --version 2>/dev/null || echo 'version n/a'))."
+  else
+    # engines.node declares >=24; on Node 22 npm prints an EBADENGINE warning
+    # that is safe to ignore — the runtime is a native Rust binary, not Node.
+    npm install -g agent-browser
+    # npm's global bin dir (e.g. ~/.hermes/node/bin) is not on PATH for
+    # non-interactive processes; link into /usr/local/bin like we do for bun.
+    local bin; bin="$(npm prefix -g)/bin/agent-browser"
+    if [ -x "$bin" ] && [ -w /usr/local/bin ]; then
+      ln -sf "$bin" /usr/local/bin/agent-browser
+    fi
+    success "agent-browser installed ($(agent-browser --version 2>/dev/null || echo 'version n/a'))."
+  fi
+  # One-time Chrome for Testing download (lands in ~/.agent-browser/browsers/;
+  # agent-browser does NOT reuse the Playwright browser cache).
+  if ls "$HOME/.agent-browser/browsers"/chrome-*/ >/dev/null 2>&1; then
+    success "agent-browser Chrome already downloaded — skipping."
+  else
+    info "Downloading Chrome for Testing (one-time, ~180 MB)..."
+    if [ "$OS" = "ubuntu" ]; then
+      agent-browser install --with-deps
+    else
+      agent-browser install
+    fi
+    success "Chrome for Testing downloaded."
+  fi
+}
+
+# Helper to flip the browser between headless (default) and headful-under-Xvfb
+# — the escalation rung for sites that block headless fingerprints.
+install_headful_toggle() {
+  # Xvfb is Linux-only; on macOS a headed browser can run natively when needed.
+  [ "$OS" = "ubuntu" ] || return 0
+  local dst=/usr/local/bin/agent-browser-headful
+  if ! [ -w /usr/local/bin ]; then
+    warn "/usr/local/bin not writable — skipping headful toggle install."
+    return 0
+  fi
+  cat > "$dst" <<'HEADFUL_EOF'
+#!/usr/bin/env bash
+# Toggle agent-browser between headless (default) and headful-under-Xvfb.
+# Headful is an escalation for bot-walls that sniff headless fingerprints;
+# always toggle off afterwards (after a reboot Xvfb is gone and a headed
+# config would make every launch fail).
+set -euo pipefail
+SOCK_DIR="${AGENT_BROWSER_SOCKET_DIR:-$HOME/.agent-browser/run}"
+CFG="$HOME/.agent-browser/config.json"
+
+stop_daemons() {
+  # 'close' only closes the browser; the daemon must die too so the next
+  # command respawns it with the new mode (and, for 'on', with DISPLAY set).
+  agent-browser close --all >/dev/null 2>&1 || true
+  local p
+  for p in "$SOCK_DIR"/*.pid; do
+    [ -f "$p" ] && kill "$(cat "$p")" 2>/dev/null || true
+  done
+  # Wait until Chrome releases the profile: a lingering/orphaned Chrome
+  # holds SingletonLock and wedges (or gets hijacked by) the next launch.
+  # The pattern is anchored to Chrome's argv[0] under ~/.agent-browser so it
+  # can never match a bystander process that merely mentions these paths.
+  local chrome_re="^$HOME/\.agent-browser/browsers/" i
+  for i in $(seq 1 10); do
+    pgrep -f "$chrome_re" >/dev/null 2>&1 || return 0
+    sleep 0.5
+  done
+  pkill -f "$chrome_re" 2>/dev/null || true
+  sleep 1
+}
+
+case "${1:-}" in
+  on)
+    command -v Xvfb >/dev/null 2>&1 || { echo "Xvfb not installed (apt-get install -y xvfb)"; exit 1; }
+    # Detect a live :99 via its X11 socket — pgrep -f on "Xvfb :99" would
+    # false-positive on any bystander process mentioning that string.
+    if ! [ -S /tmp/.X11-unix/X99 ]; then
+      Xvfb :99 -screen 0 1920x1080x24 >/dev/null 2>&1 &
+      sleep 1
+    fi
+    [ -S /tmp/.X11-unix/X99 ] || { echo "Xvfb :99 failed to start"; exit 1; }
+    stop_daemons
+    tmp=$(mktemp); jq '.headed = true' "$CFG" > "$tmp" && mv "$tmp" "$CFG"
+    # Warm the daemon WITH DISPLAY so every later command runs headed:
+    DISPLAY=:99 agent-browser get title >/dev/null 2>&1 || true
+    echo "headful ON (Xvfb :99). Run agent-browser normally; 'agent-browser-headful off' to restore."
+    ;;
+  off)
+    stop_daemons
+    tmp=$(mktemp); jq '.headed = false' "$CFG" > "$tmp" && mv "$tmp" "$CFG"
+    # Anchored so it can only match a real Xvfb argv, never a bystander
+    # process whose command line merely mentions the string.
+    pkill -f '^Xvfb :99' 2>/dev/null || true
+    echo "headless restored."
+    ;;
+  *)
+    echo "usage: agent-browser-headful on|off"
+    exit 1
+    ;;
+esac
+HEADFUL_EOF
+  chmod +x "$dst"
+  success "Installed headful toggle → $dst"
+}
+
+# Durable agent-browser defaults: persistent profile (logins survive sessions
+# and reboots — persistence is OPT-IN upstream) plus a stable downloads dir.
+# The PROXY KNOB lives here too; when a site blocks the VPS IP, enable with:
+#   tmp=$(mktemp); jq '.proxy="http://user:pass@host:port"' ~/.agent-browser/config.json > "$tmp" \
+#     && mv "$tmp" ~/.agent-browser/config.json && agent-browser close
+configure_agent_browser() {
+  if ! have jq; then
+    warn "jq missing — skipping agent-browser config."
+    return 0
+  fi
+  local dir="$HOME/.agent-browser" cfg tmp desired
+  cfg="$dir/config.json"
+  mkdir -p "$dir/profiles/default" "$dir/downloads" "$dir/run"
+  desired="$(jq -n --arg p "$dir/profiles/default" --arg d "$dir/downloads" \
+    '{profile: $p, downloadPath: $d}')"
+  tmp="$(mktemp)"
+  if [ -f "$cfg" ]; then
+    # Deep-merge; our desired keys win, user-added keys (proxy, headed) survive.
+    jq -s '.[0] * .[1]' "$cfg" <(printf '%s' "$desired") > "$tmp"
+  else
+    printf '%s\n' "$desired" > "$tmp"
+  fi
+  mv "$tmp" "$cfg"
+  success "Wrote $cfg (persistent profile, downloads dir)."
+
+  # Pin the daemon socket dir: the default ($XDG_RUNTIME_DIR, /run/user/0) is
+  # torn down on logout and absent in unattended sessions (Telegram-triggered
+  # Claude runs), which orphans daemons and causes Chrome profile-lock
+  # conflicts. A fixed dir under $HOME avoids all of it.
+  if [ "$OS" = "ubuntu" ] && [ -w /etc/profile.d ]; then
+    printf 'export AGENT_BROWSER_SOCKET_DIR="$HOME/.agent-browser/run"\n' \
+      > /etc/profile.d/agent-browser.sh
+    success "Pinned AGENT_BROWSER_SOCKET_DIR via /etc/profile.d/agent-browser.sh"
+  fi
+
+  install_headful_toggle
+}
+
 install_gh_ubuntu() {
   # Official GitHub CLI apt-repo install procedure.
   if ! have wget; then
@@ -385,6 +535,45 @@ configure_plugins() {
   #   claude plugin install playwright@claude-plugins-official
 }
 
+# Allow agent-browser commands without per-command permission prompts (a
+# prompt is effectively a denial in unattended Telegram-triggered sessions),
+# and pin the daemon socket dir for Claude-spawned shells. The blast radius
+# of the allow-rule is the browser + its profile — never arbitrary shell.
+# NOTE: jq's '*' merge REPLACES arrays, so permissions.allow needs an
+# explicit union to preserve user-added rules.
+configure_permissions() {
+  if ! have jq; then
+    warn "jq missing — skipping permissions update."
+    return 0
+  fi
+  local settings="$CLAUDE_DIR/settings.json" tmp
+  mkdir -p "$CLAUDE_DIR"
+  [ -f "$settings" ] || printf '{}\n' > "$settings"
+  tmp="$(mktemp)"
+  jq --arg sock "$HOME/.agent-browser/run" '
+    .permissions.allow = ((.permissions.allow // [])
+      + ["Bash(agent-browser:*)", "Bash(npx agent-browser:*)"] | unique)
+    | .env.AGENT_BROWSER_SOCKET_DIR = $sock
+  ' "$settings" > "$tmp" && mv "$tmp" "$settings"
+  success "Allowed Bash(agent-browser:*) and pinned socket dir in $settings."
+}
+
+# Vercel's official agent-browser skill for Claude Code, via the plugin
+# marketplace manifest shipped in vercel-labs/agent-browser. The skill itself
+# is a thin stub; the live, version-synced command reference comes from
+# `agent-browser skills get core`.
+configure_agent_browser_skill() {
+  if claude plugin list 2>/dev/null | grep -q 'agent-browser'; then
+    success "agent-browser skill (plugin) already installed — skipping."
+    return 0
+  fi
+  info "Installing agent-browser skill (plugin)..."
+  claude plugin marketplace add vercel-labs/agent-browser >/dev/null 2>&1 || true
+  claude plugin install agent-browser@agent-browser \
+    && success "Installed agent-browser skill (plugin)." \
+    || warn "Could not install agent-browser plugin. Manual alternative: npx skills add vercel-labs/agent-browser -g -a claude-code -y"
+}
+
 configure_claude() {
   info "Configuring Claude Code..."
   if ! have claude; then
@@ -393,9 +582,11 @@ configure_claude() {
   fi
   install_statusline
   configure_settings
+  configure_permissions
   configure_mcp
   configure_claude_md
   configure_plugins
+  configure_agent_browser_skill
 }
 
 # ---------------------------------------------------------------------------
@@ -420,8 +611,10 @@ summary() {
   report_tool "Hermes"      hermes
   report_tool "GitHub CLI"  gh
   report_tool "Bun"         bun
+  report_tool "agent-brwsr" agent-browser
   echo
-  info "Claude Code config applied: model opus[1m], dark theme, statusline, 'memory' MCP, official plugin marketplace."
+  info "Claude Code config applied: model opus[1m], dark theme, statusline, 'memory' MCP, official plugin marketplace,"
+  info "agent-browser (persistent profile + skill + Bash allow-rule)."
   echo
   info "Next steps:"
   echo "  • If a command isn't found, restart your shell or 'source' your rc file"
@@ -431,6 +624,8 @@ summary() {
   echo "    from your claude.ai account — run /mcp inside Claude Code to authenticate them."
   echo "  • hermes setup        — configure your Hermes LLM provider"
   echo "  • gh auth login       — authenticate the GitHub CLI"
+  echo "  • agent-browser-headful on|off — flip the surfing browser headful (Xvfb)"
+  echo "    when a site blocks headless fingerprints; always flip back off."
 }
 
 # ---------------------------------------------------------------------------
@@ -445,6 +640,8 @@ main() {
   install_hermes || error "Hermes install failed."
   install_gh     || error "GitHub CLI install failed."
   install_bun    || error "Bun install failed."
+  install_agent_browser   || error "agent-browser install failed."
+  configure_agent_browser || error "agent-browser configuration failed."
   configure_claude || error "Claude Code configuration failed."
   summary
 }
