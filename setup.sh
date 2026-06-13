@@ -577,6 +577,35 @@ configure_agent_browser_skill() {
     || warn "Could not install agent-browser plugin. Manual alternative: npx skills add vercel-labs/agent-browser -g -a claude-code -y"
 }
 
+# Install curated Agent Skills via the 'skills' CLI (skills.sh). Each skill is
+# fetched from its source repo into ~/.agents/skills/<name> and symlinked into
+# ~/.claude/skills/<name>; it loads at the next Claude session. Idempotent: a
+# skill already present in ~/.claude/skills/ is skipped (avoids a network call).
+# To grow the set, add "<owner>/<repo> <skill-name>" lines to skills_spec.
+configure_skills() {
+  if ! have npx; then
+    warn "npx (Node.js) not found — skipping Agent Skills install."
+    return 0
+  fi
+  local skills_spec=(
+    "mattpocock/skills setup-pre-commit"
+  )
+  local entry repo name
+  for entry in "${skills_spec[@]}"; do
+    read -r repo name <<<"$entry"
+    if [ -e "$CLAUDE_DIR/skills/$name" ]; then
+      success "Skill '$name' already installed — skipping."
+      continue
+    fi
+    info "Installing skill '$name' from $repo (skills CLI)..."
+    if npx -y skills@latest add "$repo" --skill "$name" --agent claude-code --global --yes >/dev/null 2>&1; then
+      success "Installed skill → $CLAUDE_DIR/skills/$name"
+    else
+      warn "Could not install skill '$name' via skills CLI."
+    fi
+  done
+}
+
 # Install repo subagents (agents/*.md → ~/.claude/agents/). New or changed
 # agents load at the next Claude session start.
 sync_agents() {
@@ -608,6 +637,7 @@ configure_claude() {
   configure_claude_md
   configure_plugins
   configure_agent_browser_skill
+  configure_skills
   sync_agents
 }
 
@@ -636,7 +666,7 @@ summary() {
   report_tool "agent-brwsr" agent-browser
   echo
   info "Claude Code config applied: model opus[1m], dark theme, statusline, 'memory' MCP, official plugin marketplace,"
-  info "agent-browser (persistent profile + skill + Bash allow-rule) and subagents (scout, surfer)."
+  info "agent-browser (persistent profile + skill + Bash allow-rule), subagents (scout, surfer) and Agent Skills (setup-pre-commit)."
   echo
   info "Next steps:"
   echo "  • If a command isn't found, restart your shell or 'source' your rc file"

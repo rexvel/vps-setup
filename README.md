@@ -41,7 +41,7 @@ anything already installed is detected and skipped.
 | **Bun** | Installs Bun (`bun.sh`) and symlinks it into `/usr/local/bin` — the runtime some plugin MCP channel servers (e.g. the official Telegram plugin) need to launch. |
 | **agent-browser** | Installs [Vercel's agent-browser](https://github.com/vercel-labs/agent-browser) (browser-automation CLI for AI agents, symlinked into `/usr/local/bin`) and downloads its Chrome for Testing. |
 | **agent-browser config** | Persistent browser profile (`~/.agent-browser/profiles/default` — logins survive sessions/reboots), stable downloads dir, pinned daemon socket dir (`/etc/profile.d/agent-browser.sh`), and the `agent-browser-headful` Xvfb toggle for bot-walls. The proxy knob lives in `~/.agent-browser/config.json`. |
-| **Claude config** | Merges `~/.claude/settings.json` (model `opus[1m]`, dark theme, custom statusline, `Bash(agent-browser:*)` allow-rule), installs the statusline script, registers the local `memory` MCP server, adds the official plugin marketplace + the agent-browser skill, and syncs `agents/*.md` into `~/.claude/agents/`. |
+| **Claude config** | Merges `~/.claude/settings.json` (model `opus[1m]`, dark theme, custom statusline, `Bash(agent-browser:*)` allow-rule), installs the statusline script, registers the local `memory` MCP server, adds the official plugin marketplace + the agent-browser skill, syncs `agents/*.md` into `~/.claude/agents/`, and installs curated **Agent Skills** via the [`skills`](https://skills.sh) CLI (currently `setup-pre-commit`). |
 
 It finishes with a summary of resolved tool paths/versions and next-step hints
 (`claude`, `hermes setup`, `gh auth login`).
@@ -76,6 +76,26 @@ cp agents/scout.md agents/surfer.md ~/.claude/agents/
 See [`agents/README.md`](./agents/README.md) for the subagent file format,
 frontmatter fields, invocation methods, and the Scout research-agent pattern in
 depth — all grounded in the official Claude Code documentation.
+
+## Skills
+
+`setup.sh` also installs curated **Agent Skills** through the
+[`skills`](https://skills.sh) CLI (`configure_skills`). Each skill is fetched
+from its source repository into `~/.agents/skills/<name>` and symlinked into
+`~/.claude/skills/<name>`, where Claude Code loads it on the next session.
+Currently shipped:
+
+- **`setup-pre-commit`** ([mattpocock/skills](https://github.com/mattpocock/skills/blob/main/skills/misc/setup-pre-commit/SKILL.md))
+  — set up Husky pre-commit hooks with lint-staged (Prettier), type-checking and
+  tests in the current repo.
+
+The install is idempotent (a skill already present in `~/.claude/skills/` is
+skipped). To add more, append `"<owner>/<repo> <skill-name>"` lines to the
+`skills_spec` array in `configure_skills`. To install one by hand:
+
+```bash
+npx skills@latest add mattpocock/skills --skill setup-pre-commit --agent claude-code --global --yes
+```
 
 ## Requirements
 
