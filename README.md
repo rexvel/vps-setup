@@ -11,10 +11,16 @@ configuration, and ships custom **subagents** you can drop into `~/.claude/agent
 vps-agents-setup/
 ├── README.md          # this file
 ├── setup.sh           # interactive cross-platform bootstrap installer
-└── agents/
-    ├── README.md      # reference: Claude Code subagents + the Scout pattern
-    ├── scout.md       # Scout — a web-research subagent definition
-    └── surfer.md      # Surfer — an interactive web-browsing subagent (agent-browser)
+├── agents/
+│   ├── README.md      # reference: Claude Code subagents + the Scout pattern
+│   ├── scout.md       # Scout — a web-research subagent definition
+│   └── surfer.md      # Surfer — an interactive web-browsing subagent (agent-browser)
+├── commands/          # custom slash commands → ~/.claude/commands/
+│   ├── todo-convert.md
+│   ├── send-to-notion.md
+│   └── list-commands.md
+└── scripts/           # helper scripts for commands → ~/.claude/scripts/
+    └── list-commands.sh
 ```
 
 ## Quick start
@@ -41,7 +47,7 @@ anything already installed is detected and skipped.
 | **Bun** | Installs Bun (`bun.sh`) and symlinks it into `/usr/local/bin` — the runtime some plugin MCP channel servers (e.g. the official Telegram plugin) need to launch. |
 | **agent-browser** | Installs [Vercel's agent-browser](https://github.com/vercel-labs/agent-browser) (browser-automation CLI for AI agents, symlinked into `/usr/local/bin`) and downloads its Chrome for Testing. |
 | **agent-browser config** | Persistent browser profile (`~/.agent-browser/profiles/default` — logins survive sessions/reboots), stable downloads dir, pinned daemon socket dir (`/etc/profile.d/agent-browser.sh`), and the `agent-browser-headful` Xvfb toggle for bot-walls. The proxy knob lives in `~/.agent-browser/config.json`. |
-| **Claude config** | Merges `~/.claude/settings.json` (model `opus[1m]`, dark theme, custom statusline, `Bash(agent-browser:*)` allow-rule), installs the statusline script, registers the local `memory` MCP server, adds the official plugin marketplace + the agent-browser skill, syncs `agents/*.md` into `~/.claude/agents/`, and installs curated **Agent Skills** via the [`skills`](https://skills.sh) CLI (currently `setup-pre-commit`). |
+| **Claude config** | Merges `~/.claude/settings.json` (model `opus[1m]`, dark theme, custom statusline, `Bash(agent-browser:*)` allow-rule), installs the statusline script, registers the local `memory` MCP server, adds the official plugin marketplace + the agent-browser skill, syncs `agents/*.md` into `~/.claude/agents/`, installs curated **Agent Skills** via the [`skills`](https://skills.sh) CLI (currently `setup-pre-commit`), and syncs `commands/*.md` + `scripts/*.sh` into `~/.claude/commands/` and `~/.claude/scripts/`. |
 
 It finishes with a summary of resolved tool paths/versions and next-step hints
 (`claude`, `hermes setup`, `gh auth login`).
@@ -96,6 +102,32 @@ skipped). To add more, append `"<owner>/<repo> <skill-name>"` lines to the
 ```bash
 npx skills@latest add mattpocock/skills --skill setup-pre-commit --agent claude-code --global --yes
 ```
+
+## Commands
+
+`setup.sh` syncs custom **slash commands** (`sync_commands`) from
+[`commands/`](./commands) into `~/.claude/commands/`, plus any helper scripts
+from [`scripts/`](./scripts) into `~/.claude/scripts/` (commands load at the next
+Claude session start). Currently shipped:
+
+- **`/todo-convert <text>`** — grills you about a task via the `grill-me` skill,
+  then converts it into a structured, checkable todo-list and offers to save it
+  to Notion.
+- **`/send-to-notion <text>`** — saves the given text/data to a new Notion page
+  (auto-titled), no confirmation prompt.
+- **`/list-commands`** — lists custom commands + personal skills (runs
+  `scripts/list-commands.sh`); plugin/built-in commands stay under `/help`.
+
+To sync them by hand instead:
+
+```bash
+mkdir -p ~/.claude/commands ~/.claude/scripts
+cp commands/*.md ~/.claude/commands/
+cp scripts/*.sh  ~/.claude/scripts/
+```
+
+> The `/todo-convert` and `/send-to-notion` commands use the **Notion**
+> connector, which syncs from your claude.ai account (`/mcp` to authenticate).
 
 ## Requirements
 

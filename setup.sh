@@ -624,6 +624,32 @@ sync_agents() {
   done
 }
 
+# Install repo slash commands (commands/*.md → ~/.claude/commands/) and their
+# helper scripts (scripts/*.sh → ~/.claude/scripts/). Commands load at the next
+# Claude session start. list-commands.md hard-references ~/.claude/scripts, so
+# the scripts sync must land there too.
+sync_commands() {
+  local cdir="$SCRIPT_DIR/commands" sdir="$SCRIPT_DIR/scripts" f name
+  if [ -d "$cdir" ]; then
+    mkdir -p "$CLAUDE_DIR/commands"
+    for f in "$cdir"/*.md; do
+      [ -e "$f" ] || continue
+      name="$(basename "$f")"
+      [ "$name" = "README.md" ] && continue
+      install -m 0644 "$f" "$CLAUDE_DIR/commands/$name"
+      success "Installed command → $CLAUDE_DIR/commands/$name"
+    done
+  fi
+  if [ -d "$sdir" ]; then
+    mkdir -p "$CLAUDE_DIR/scripts"
+    for f in "$sdir"/*.sh; do
+      [ -e "$f" ] || continue
+      install -m 0755 "$f" "$CLAUDE_DIR/scripts/$(basename "$f")"
+      success "Installed script → $CLAUDE_DIR/scripts/$(basename "$f")"
+    done
+  fi
+}
+
 configure_claude() {
   info "Configuring Claude Code..."
   if ! have claude; then
@@ -639,6 +665,7 @@ configure_claude() {
   configure_agent_browser_skill
   configure_skills
   sync_agents
+  sync_commands
 }
 
 # ---------------------------------------------------------------------------
@@ -666,7 +693,8 @@ summary() {
   report_tool "agent-brwsr" agent-browser
   echo
   info "Claude Code config applied: model opus[1m], dark theme, statusline, 'memory' MCP, official plugin marketplace,"
-  info "agent-browser (persistent profile + skill + Bash allow-rule), subagents (scout, surfer) and Agent Skills (setup-pre-commit)."
+  info "agent-browser (persistent profile + skill + Bash allow-rule), subagents (scout, surfer), Agent Skills (setup-pre-commit)"
+  info "and custom slash commands (/todo-convert, /send-to-notion, /list-commands)."
   echo
   info "Next steps:"
   echo "  • If a command isn't found, restart your shell or 'source' your rc file"
