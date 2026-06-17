@@ -592,6 +592,7 @@ configure_skills() {
     "mattpocock/skills writing-great-skills"
     "mattpocock/skills teach"
     "anthropics/skills pdf"
+    "michalparkola/tapestry-skills youtube-transcript"
   )
   local entry repo name
   for entry in "${skills_spec[@]}"; do
@@ -696,7 +697,7 @@ summary() {
   report_tool "agent-brwsr" agent-browser
   echo
   info "Claude Code config applied: model opus[1m], dark theme, statusline, 'memory' MCP, official plugin marketplace,"
-  info "agent-browser (persistent profile + skill + Bash allow-rule), subagents (scout, surfer), Agent Skills (setup-pre-commit, writing-great-skills, teach, pdf)"
+  info "agent-browser (persistent profile + skill + Bash allow-rule), subagents (scout, surfer), Agent Skills (setup-pre-commit, writing-great-skills, teach, pdf, youtube-transcript)"
   info "and custom slash commands (/todo-convert, /send-to-notion, /prompt-enhance, /list-commands)."
   echo
   info "Next steps:"

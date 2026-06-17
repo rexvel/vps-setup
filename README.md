@@ -48,7 +48,7 @@ anything already installed is detected and skipped.
 | **Bun** | Installs Bun (`bun.sh`) and symlinks it into `/usr/local/bin` — the runtime some plugin MCP channel servers (e.g. the official Telegram plugin) need to launch. |
 | **agent-browser** | Installs [Vercel's agent-browser](https://github.com/vercel-labs/agent-browser) (browser-automation CLI for AI agents, symlinked into `/usr/local/bin`) and downloads its Chrome for Testing. |
 | **agent-browser config** | Persistent browser profile (`~/.agent-browser/profiles/default` — logins survive sessions/reboots), stable downloads dir, pinned daemon socket dir (`/etc/profile.d/agent-browser.sh`), and the `agent-browser-headful` Xvfb toggle for bot-walls. The proxy knob lives in `~/.agent-browser/config.json`. |
-| **Claude config** | Merges `~/.claude/settings.json` (model `opus[1m]`, dark theme, custom statusline, `Bash(agent-browser:*)` allow-rule), installs the statusline script, registers the local `memory` MCP server, adds the official plugin marketplace + the agent-browser skill, syncs `agents/*.md` into `~/.claude/agents/`, installs curated **Agent Skills** via the [`skills`](https://skills.sh) CLI (currently `setup-pre-commit`, `writing-great-skills`, `teach`, `pdf`), and syncs `commands/*.md` + `scripts/*.sh` into `~/.claude/commands/` and `~/.claude/scripts/`. |
+| **Claude config** | Merges `~/.claude/settings.json` (model `opus[1m]`, dark theme, custom statusline, `Bash(agent-browser:*)` allow-rule), installs the statusline script, registers the local `memory` MCP server, adds the official plugin marketplace + the agent-browser skill, syncs `agents/*.md` into `~/.claude/agents/`, installs curated **Agent Skills** via the [`skills`](https://skills.sh) CLI (currently `setup-pre-commit`, `writing-great-skills`, `teach`, `pdf`, `youtube-transcript`), and syncs `commands/*.md` + `scripts/*.sh` into `~/.claude/commands/` and `~/.claude/scripts/`. |
 
 It finishes with a summary of resolved tool paths/versions and next-step hints
 (`claude`, `hermes setup`, `gh auth login`).
@@ -106,6 +106,10 @@ Currently shipped:
   watermark, create, fill forms, encrypt/decrypt, extract images, and OCR scanned
   PDFs (Python-based; bundles helper scripts. Proprietary license — see its
   `LICENSE.txt`).
+- **`youtube-transcript`** ([michalparkola/tapestry-skills](https://github.com/michalparkola/tapestry-skills/blob/main/youtube-transcript/SKILL.md))
+  — download a YouTube video's transcript/captions via `yt-dlp` (which it
+  auto-installs on first use — apt/brew/pip, OS-aware), falling back to Whisper
+  transcription when a video has no captions.
 
 The install is idempotent (a skill already present in `~/.claude/skills/` is
 skipped). To add more, append `"<owner>/<repo> <skill-name>"` lines to the
