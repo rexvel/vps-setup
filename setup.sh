@@ -694,7 +694,7 @@ summary() {
   echo
   info "Claude Code config applied: model opus[1m], dark theme, statusline, 'memory' MCP, official plugin marketplace,"
   info "agent-browser (persistent profile + skill + Bash allow-rule), subagents (scout, surfer), Agent Skills (setup-pre-commit)"
-  info "and custom slash commands (/todo-convert, /send-to-notion, /list-commands)."
+  info "and custom slash commands (/todo-convert, /send-to-notion, /prompt-enhance, /list-commands)."
   echo
   info "Next steps:"
   echo "  • If a command isn't found, restart your shell or 'source' your rc file"

@@ -18,6 +18,7 @@ vps-agents-setup/
 ├── commands/          # custom slash commands → ~/.claude/commands/
 │   ├── todo-convert.md
 │   ├── send-to-notion.md
+│   ├── prompt-enhance.md
 │   └── list-commands.md
 └── scripts/           # helper scripts for commands → ~/.claude/scripts/
     └── list-commands.sh
@@ -115,6 +116,11 @@ Claude session start). Currently shipped:
   to Notion.
 - **`/send-to-notion <text>`** — saves the given text/data to a new Notion page
   (auto-titled), no confirmation prompt.
+- **`/prompt-enhance [--framework …] [--ask] <prompt>`** — rewrites a rough
+  prompt into a higher-quality one (the **CRAFT** framework by default;
+  `--framework` switches to CO-STAR/RTF/RISEN), auto-gathering repo context
+  (git state, relevant files) for coding prompts. Outputs the improved prompt
+  only — it never runs it.
 - **`/list-commands`** — lists custom commands + personal skills (runs
   `scripts/list-commands.sh`); plugin/built-in commands stay under `/help`.
 
